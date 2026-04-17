@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/ia-model-ec2-deploy}"
+BRANCH="${BRANCH:-main}"
+
+if [[ ! -d "$APP_DIR" ]]; then
+  echo "APP_DIR not found: $APP_DIR"
+  exit 1
+fi
+
+if [[ -f "${APP_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${APP_DIR}/.env"
+  set +a
+fi
+
+OLLAMA_PORT="${OLLAMA_PORT:-11434}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:e2b}"
+
+cd "$APP_DIR"
+
+echo "[deploy] Updating code"
+git fetch origin "$BRANCH"
+git checkout "$BRANCH"
+git pull --ff-only origin "$BRANCH"
+
+echo "[deploy] Starting containers"
+docker compose up -d --remove-orphans
+
+echo "[deploy] Waiting for Ollama"
+READY=0
+for _ in $(seq 1 45); do
+  if curl -fsS "http://127.0.0.1:${OLLAMA_PORT}/api/tags" >/dev/null; then
+    READY=1
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$READY" -ne 1 ]]; then
+  echo "Ollama API is not responding on port ${OLLAMA_PORT}"
+  exit 1
+fi
+
+echo "[deploy] Ensuring model ${OLLAMA_MODEL}"
+docker exec ollama ollama pull "${OLLAMA_MODEL}"
+
+echo "[deploy] Current tags"
+curl -fsS "http://127.0.0.1:${OLLAMA_PORT}/api/tags"
+echo
+
+echo "[deploy] Done"

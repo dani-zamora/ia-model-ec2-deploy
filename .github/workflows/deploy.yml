@@ -1,0 +1,42 @@
+name: Deploy EC2 IA Model
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'push' &&
+        (
+          vars.DEPLOY_ON_PUSH == 'true' ||
+          contains(github.event.head_commit.message, '[deploy]')
+        )
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger info
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "deploy_on_push_var=${{ vars.DEPLOY_ON_PUSH }}"
+          echo "head_commit_message=${{ github.event.head_commit.message }}"
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ secrets.EC2_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="/opt/ia-model-ec2-deploy"
+            fi
+            export APP_DIR
+            export BRANCH="main"
+            bash "$APP_DIR/scripts/deploy.sh"

@@ -1,0 +1,113 @@
+# IA Model on EC2 (Deploy configurable)
+
+Repositorio independiente para desplegar modelos de IA con Ollama en una EC2 GPU (`g4dn.xlarge` minimo recomendado) usando Docker + GitHub Actions.
+
+## Que incluye
+
+- `docker-compose.yml` para levantar Ollama con GPU.
+- `scripts/bootstrap-ec2.sh` para instalar Docker, NVIDIA toolkit y preparar la instancia.
+- `scripts/deploy.sh` para actualizar desde GitHub y redeploy.
+- Workflow `.github/workflows/deploy.yml` con deploy manual y deploy automatico opcional.
+
+## Arquitectura
+
+- EC2 Ubuntu 24.04 (x86_64), tipo `g4dn.xlarge`.
+- Contenedor `ollama/ollama` con acceso a GPU NVIDIA.
+- Modelo configurable por `.env` (`OLLAMA_MODEL`).
+- API de Ollama en puerto `11434`.
+
+## 1) Crear y subir este repo a GitHub
+
+Desde esta carpeta:
+
+```bash
+git init
+git add .
+git commit -m "chore: bootstrap ia model ec2 deploy repo"
+git branch -M main
+git remote add origin <TU_URL_GITHUB>
+git push -u origin main
+```
+
+El primer `push` no hace deploy por defecto.
+
+## 2) Bootstrap inicial en la EC2 (una sola vez)
+
+Conectate por SSH y ejecuta:
+
+```bash
+git clone <TU_URL_GITHUB> /opt/ia-model-ec2-deploy
+cd /opt/ia-model-ec2-deploy
+sudo bash ./scripts/bootstrap-ec2.sh \
+  --repo-url <TU_URL_GITHUB> \
+  --branch main \
+  --app-dir /opt/ia-model-ec2-deploy \
+  --model gemma4:e2b \
+  --deploy-user ubuntu
+```
+
+Si el script indica reinicio por drivers NVIDIA, reinicia la instancia y vuelve a ejecutar el script.
+
+## 3) Configurar Secrets en GitHub
+
+En tu repo de GitHub (`Settings > Secrets and variables > Actions`), crea:
+
+- `EC2_HOST`: IP o DNS publico de la EC2.
+- `EC2_USER`: normalmente `ubuntu`.
+- `EC2_SSH_KEY`: clave privada PEM para SSH (contenido completo).
+- `EC2_APP_DIR`: opcional, por defecto `/opt/ia-model-ec2-deploy`.
+
+## 4) Como se dispara el deploy
+
+Tienes 3 formas:
+
+1. Manual (recomendado al inicio): `Actions > Deploy EC2 IA Model > Run workflow`
+2. Automatico en cada push: crear variable de repo `DEPLOY_ON_PUSH=true`
+3. Puntual por commit: incluir `[deploy]` en el mensaje del commit
+
+Si no haces nada de lo anterior, un `push` normal no desplegara.
+
+Cuando se ejecuta deploy:
+
+1. SSH a la EC2
+2. `git pull --ff-only`
+3. `docker compose up -d`
+4. Pull del modelo configurado (`OLLAMA_MODEL`)
+5. Verificacion de `api/tags`
+
+## Variables de entorno (`.env`)
+
+Parti de `.env.example`:
+
+```env
+OLLAMA_PORT=11434
+OLLAMA_MODEL=gemma4:e2b
+OLLAMA_KEEP_ALIVE=24h
+```
+
+Puedes cambiar `OLLAMA_MODEL` a cualquier tag de Ollama sin tocar codigo.
+
+## Verificacion manual
+
+En la EC2:
+
+```bash
+curl http://127.0.0.1:11434/api/tags
+docker logs --tail=100 ollama
+```
+
+Desde otra maquina dentro de la VPC (si SG lo permite):
+
+```bash
+curl http://<IP_PRIVADA_EC2>:11434/api/tags
+```
+
+## Coste cuando la instancia esta apagada
+
+Con EC2 en `Stopped` pagas normalmente:
+
+- EBS (disco)
+- IPv4 publica si la mantienes asignada
+- snapshots (si existen)
+
+No pagas computo mientras esta detenida.
