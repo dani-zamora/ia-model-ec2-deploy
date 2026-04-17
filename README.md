@@ -48,24 +48,36 @@ sudo bash ./scripts/bootstrap-ec2.sh \
 
 Si el script indica reinicio por drivers NVIDIA, reinicia la instancia y vuelve a ejecutar el script.
 
-## 3) Configurar Secrets en GitHub
+## 3) Configurar GitHub Actions (secrets y variables)
 
 En tu repo de GitHub (`Settings > Secrets and variables > Actions`), crea:
 
-- `EC2_HOST`: IP o DNS publico de la EC2.
-- `EC2_USER`: normalmente `ubuntu`.
-- `EC2_SSH_KEY`: clave privada PEM para SSH (contenido completo).
-- `EC2_APP_DIR`: opcional, por defecto `/opt/ia-model-ec2-deploy`.
+- Secrets requeridos:
+  - `EC2_HOST`: IP o DNS publico de la EC2.
+  - `EC2_USER`: normalmente `ubuntu`.
+  - `EC2_SSH_KEY`: clave privada PEM para SSH (contenido completo).
+- Secret opcional:
+  - `EC2_APP_DIR`: por defecto `/opt/ia-model-ec2-deploy`.
+- Variable de repo:
+  - `DEPLOY_ON_PUSH=true` para habilitar deploy automatico en cada push a `main`.
+  - Si no existe o no vale `true`, no hay deploy automatico por push.
 
 ## 4) Como se dispara el deploy
 
-Tienes 3 formas:
+Tienes 2 formas:
 
 1. Manual (recomendado al inicio): `Actions > Deploy EC2 IA Model > Run workflow`
-2. Automatico en cada push: crear variable de repo `DEPLOY_ON_PUSH=true`
-3. Puntual por commit: incluir `[deploy]` en el mensaje del commit
+2. Automatico en cada push: variable de repo `DEPLOY_ON_PUSH=true`
 
-Si no haces nada de lo anterior, un `push` normal no desplegara.
+No existe trigger por mensaje de commit.
+Si no activas `DEPLOY_ON_PUSH=true`, un `push` normal no desplegara.
+
+## 5) Checklist rapido de puesta en marcha
+
+1. Crear los secrets `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`.
+2. (Opcional) Crear `EC2_APP_DIR` si usas ruta distinta.
+3. Crear variable `DEPLOY_ON_PUSH=true`.
+4. Hacer push a `main` o ejecutar workflow manual.
 
 Cuando se ejecuta deploy:
 
@@ -75,7 +87,7 @@ Cuando se ejecuta deploy:
 4. Pull del modelo configurado (`OLLAMA_MODEL`)
 5. Verificacion de `api/tags`
 
-## Variables de entorno (`.env`)
+## 6) Variables de entorno (`.env`)
 
 Parti de `.env.example`:
 
@@ -87,7 +99,7 @@ OLLAMA_KEEP_ALIVE=24h
 
 Puedes cambiar `OLLAMA_MODEL` a cualquier tag de Ollama sin tocar codigo.
 
-## Verificacion manual
+## 7) Verificacion manual
 
 En la EC2:
 
@@ -102,7 +114,7 @@ Desde otra maquina dentro de la VPC (si SG lo permite):
 curl http://<IP_PRIVADA_EC2>:11434/api/tags
 ```
 
-## Coste cuando la instancia esta apagada
+## 8) Coste cuando la instancia esta apagada
 
 Con EC2 en `Stopped` pagas normalmente:
 
