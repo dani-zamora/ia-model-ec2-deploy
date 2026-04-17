@@ -8,19 +8,45 @@ on:
 
 jobs:
   deploy:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'push' &&
-        vars.DEPLOY_ON_PUSH == 'true'
-      )
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read DEPLOY_ON_PUSH from .env
+        id: deploy_toggle
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_ON_PUSH_VALUE="false"
+          if [[ -f ".env" ]]; then
+            RAW_VALUE="$(grep -E '^DEPLOY_ON_PUSH=' .env | tail -n1 | cut -d= -f2- || true)"
+            NORMALIZED_VALUE="$(echo "${RAW_VALUE}" | tr -d "\"'[:space:]" | tr '[:upper:]' '[:lower:]')"
+            if [[ "${NORMALIZED_VALUE}" == "true" ]]; then
+              DEPLOY_ON_PUSH_VALUE="true"
+            fi
+          fi
+          echo "deploy_on_push=${DEPLOY_ON_PUSH_VALUE}" >> "$GITHUB_OUTPUT"
+
       - name: Trigger info
         run: |
           echo "event=${{ github.event_name }}"
-          echo "deploy_on_push_var=${{ vars.DEPLOY_ON_PUSH }}"
+          echo "deploy_on_push_env=${{ steps.deploy_toggle.outputs.deploy_on_push }}"
+
+      - name: Skip deploy on push when disabled
+        if: >
+          github.event_name == 'push' &&
+          steps.deploy_toggle.outputs.deploy_on_push != 'true'
+        run: |
+          echo "Skipping deploy because DEPLOY_ON_PUSH is not true in .env"
+
       - name: Deploy over SSH
+        if: >
+          github.event_name == 'workflow_dispatch' ||
+          (
+            github.event_name == 'push' &&
+            steps.deploy_toggle.outputs.deploy_on_push == 'true'
+          )
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}

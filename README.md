@@ -29,7 +29,7 @@ git remote add origin <TU_URL_GITHUB>
 git push -u origin main
 ```
 
-El primer `push` no hace deploy por defecto.
+Con `DEPLOY_ON_PUSH=true` (valor actual), cada `push` a `main` dispara deploy.
 
 ## 2) Bootstrap inicial en la EC2 (una sola vez)
 
@@ -48,7 +48,7 @@ sudo bash ./scripts/bootstrap-ec2.sh \
 
 Si el script indica reinicio por drivers NVIDIA, reinicia la instancia y vuelve a ejecutar el script.
 
-## 3) Configurar GitHub Actions (secrets y variables)
+## 3) Configurar GitHub Actions (secrets)
 
 En tu repo de GitHub (`Settings > Secrets and variables > Actions`), crea:
 
@@ -58,25 +58,23 @@ En tu repo de GitHub (`Settings > Secrets and variables > Actions`), crea:
   - `EC2_SSH_KEY`: clave privada PEM para SSH (contenido completo).
 - Secret opcional:
   - `EC2_APP_DIR`: por defecto `/opt/ia-model-ec2-deploy`.
-- Variable de repo:
-  - `DEPLOY_ON_PUSH=true` para habilitar deploy automatico en cada push a `main`.
-  - Si no existe o no vale `true`, no hay deploy automatico por push.
 
 ## 4) Como se dispara el deploy
 
 Tienes 2 formas:
 
 1. Manual (recomendado al inicio): `Actions > Deploy EC2 IA Model > Run workflow`
-2. Automatico en cada push: variable de repo `DEPLOY_ON_PUSH=true`
+2. Automatico en cada push a `main`: depende de `DEPLOY_ON_PUSH` en `.env`
 
 No existe trigger por mensaje de commit.
-Si no activas `DEPLOY_ON_PUSH=true`, un `push` normal no desplegara.
+Si `DEPLOY_ON_PUSH=true`, un `push` en `main` despliega.
+Si `DEPLOY_ON_PUSH=false`, un `push` en `main` no despliega.
 
 ## 5) Checklist rapido de puesta en marcha
 
 1. Crear los secrets `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`.
 2. (Opcional) Crear `EC2_APP_DIR` si usas ruta distinta.
-3. Crear variable `DEPLOY_ON_PUSH=true`.
+3. Revisar `.env` y definir `DEPLOY_ON_PUSH=true` o `false`.
 4. Hacer push a `main` o ejecutar workflow manual.
 
 Cuando se ejecuta deploy:
@@ -95,9 +93,14 @@ Parti de `.env.example`:
 OLLAMA_PORT=11434
 OLLAMA_MODEL=gemma4:e2b
 OLLAMA_KEEP_ALIVE=24h
+DEPLOY_ON_PUSH=true
 ```
 
 Puedes cambiar `OLLAMA_MODEL` a cualquier tag de Ollama sin tocar codigo.
+Puedes cambiar `DEPLOY_ON_PUSH` para activar/desactivar deploy automatico por push.
+
+`DEPLOY_ON_PUSH` se lee desde el `.env` versionado en el repositorio.
+No guardes secretos en `.env`; usa GitHub Secrets para eso.
 
 ## 7) Verificacion manual
 
