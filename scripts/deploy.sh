@@ -18,6 +18,7 @@ fi
 
 OLLAMA_PORT="${OLLAMA_PORT:-11434}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-gemma4:e2b}"
+USE_GPU="${USE_GPU:-false}"
 
 cd "$APP_DIR"
 
@@ -27,7 +28,14 @@ git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
 echo "[deploy] Starting containers"
-docker compose up -d --remove-orphans
+COMPOSE_FILES=(-f docker-compose.yml)
+if [[ "${USE_GPU,,}" == "true" ]]; then
+  COMPOSE_FILES+=(-f docker-compose.gpu.yml)
+  echo "[deploy] GPU mode enabled (USE_GPU=true)"
+else
+  echo "[deploy] CPU mode enabled (USE_GPU=${USE_GPU})"
+fi
+docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
 
 echo "[deploy] Waiting for Ollama"
 READY=0

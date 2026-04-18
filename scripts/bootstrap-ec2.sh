@@ -6,6 +6,7 @@ APP_DIR="/opt/ia-model-ec2-deploy"
 BRANCH="main"
 MODEL="gemma4:e2b"
 DEPLOY_USER="ubuntu"
+USE_GPU="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --deploy-user)
       DEPLOY_USER="$2"
+      shift 2
+      ;;
+    --use-gpu)
+      USE_GPU="$2"
       shift 2
       ;;
     *)
@@ -64,35 +69,40 @@ if id -u "$DEPLOY_USER" >/dev/null 2>&1; then
 fi
 
 echo "[3/7] Installing NVIDIA driver (if missing)"
-if ! nvidia-smi >/dev/null 2>&1; then
-  ubuntu-drivers install || true
-fi
+USE_GPU_NORMALIZED="$(echo "$USE_GPU" | tr '[:upper:]' '[:lower:]')"
+if [[ "$USE_GPU_NORMALIZED" == "true" ]]; then
+  if ! nvidia-smi >/dev/null 2>&1; then
+    ubuntu-drivers install || true
+  fi
 
-if [[ -f /var/run/reboot-required ]]; then
-  echo "NVIDIA driver installed/updated. Reboot required before continuing."
-  echo "Run: sudo reboot"
-  exit 0
-fi
+  if [[ -f /var/run/reboot-required ]]; then
+    echo "NVIDIA driver installed/updated. Reboot required before continuing."
+    echo "Run: sudo reboot"
+    exit 0
+  fi
 
-if ! nvidia-smi >/dev/null 2>&1; then
-  echo "NVIDIA driver is not operational (nvidia-smi failed)."
-  echo "Run diagnostics:"
-  echo "  lspci | grep -i nvidia"
-  echo "  ubuntu-drivers list --gpgpu"
-  echo "If no NVIDIA device appears in lspci, the instance type likely has no GPU."
-  exit 1
-fi
+  if ! nvidia-smi >/dev/null 2>&1; then
+    echo "NVIDIA driver is not operational (nvidia-smi failed)."
+    echo "Run diagnostics:"
+    echo "  lspci | grep -i nvidia"
+    echo "  ubuntu-drivers list --gpgpu"
+    echo "If no NVIDIA device appears in lspci, the instance type likely has no GPU."
+    exit 1
+  fi
 
-echo "[4/7] Installing NVIDIA container toolkit"
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-  | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -fsSL "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list" \
-  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-  > /etc/apt/sources.list.d/nvidia-container-toolkit.list
-apt-get update -y
-apt-get install -y nvidia-container-toolkit
-nvidia-ctk runtime configure --runtime=docker
-systemctl restart docker
+  echo "[4/7] Installing NVIDIA container toolkit"
+  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+    | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  curl -fsSL "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list" \
+    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+    > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+  apt-get update -y
+  apt-get install -y nvidia-container-toolkit
+  nvidia-ctk runtime configure --runtime=docker
+  systemctl restart docker
+else
+  echo "CPU mode selected (USE_GPU=${USE_GPU}); skipping NVIDIA driver/toolkit setup."
+fi
 
 echo "[5/7] Cloning or updating app repo"
 if [[ -d "${APP_DIR}/.git" ]]; then
@@ -113,10 +123,19 @@ if [[ ! -f "${APP_DIR}/.env" ]]; then
   cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
 fi
 sed -i "s/^OLLAMA_MODEL=.*/OLLAMA_MODEL=${MODEL}/" "${APP_DIR}/.env"
+if grep -q '^USE_GPU=' "${APP_DIR}/.env"; then
+  sed -i "s/^USE_GPU=.*/USE_GPU=${USE_GPU_NORMALIZED}/" "${APP_DIR}/.env"
+else
+  echo "USE_GPU=${USE_GPU_NORMALIZED}" >> "${APP_DIR}/.env"
+fi
 
 echo "[7/7] First deployment"
 cd "$APP_DIR"
-docker compose up -d --remove-orphans
+COMPOSE_FILES=(-f docker-compose.yml)
+if [[ "${USE_GPU_NORMALIZED}" == "true" ]]; then
+  COMPOSE_FILES+=(-f docker-compose.gpu.yml)
+fi
+docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
 
 echo "Waiting for Ollama API..."
 for _ in $(seq 1 30); do

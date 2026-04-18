@@ -1,18 +1,19 @@
 # IA Model on EC2 (Deploy configurable)
 
-Repositorio independiente para desplegar modelos de IA con Ollama en una EC2 GPU (`g4dn.xlarge` minimo recomendado) usando Docker + GitHub Actions.
+Repositorio independiente para desplegar modelos de IA con Ollama en EC2 (CPU o GPU) usando Docker + GitHub Actions.
 
 ## Que incluye
 
-- `docker-compose.yml` para levantar Ollama con GPU.
-- `scripts/bootstrap-ec2.sh` para instalar Docker, NVIDIA toolkit y preparar la instancia.
+- `docker-compose.yml` para levantar Ollama en CPU.
+- `docker-compose.gpu.yml` para activar GPU cuando `USE_GPU=true`.
+- `scripts/bootstrap-ec2.sh` para instalar Docker y, opcionalmente, stack NVIDIA.
 - `scripts/deploy.sh` para actualizar desde GitHub y redeploy.
 - Workflow `.github/workflows/deploy.yml` con deploy manual y deploy automatico opcional.
 
 ## Arquitectura
 
-- EC2 Ubuntu 24.04 (x86_64), tipo `g4dn.xlarge`.
-- Contenedor `ollama/ollama` con acceso a GPU NVIDIA.
+- EC2 Ubuntu 24.04 (x86_64), CPU o GPU.
+- Contenedor `ollama/ollama` en CPU por defecto, con GPU opcional.
 - Modelo configurable por `.env` (`OLLAMA_MODEL`).
 - API de Ollama en puerto `11434`.
 
@@ -43,10 +44,11 @@ sudo bash ./scripts/bootstrap-ec2.sh \
   --branch main \
   --app-dir /opt/ia-model-ec2-deploy \
   --model gemma4:e2b \
+  --use-gpu false \
   --deploy-user ubuntu
 ```
 
-Si el script indica reinicio por drivers NVIDIA, reinicia la instancia y vuelve a ejecutar el script.
+Si usas `--use-gpu true` y el script indica reinicio por drivers NVIDIA, reinicia la instancia y vuelve a ejecutar el script.
 
 ## 3) Configurar GitHub Actions (secrets)
 
@@ -93,10 +95,12 @@ Parti de `.env.example`:
 OLLAMA_PORT=11434
 OLLAMA_MODEL=gemma4:e2b
 OLLAMA_KEEP_ALIVE=24h
+USE_GPU=false
 DEPLOY_ON_PUSH=true
 ```
 
 Puedes cambiar `OLLAMA_MODEL` a cualquier tag de Ollama sin tocar codigo.
+Puedes activar GPU poniendo `USE_GPU=true` cuando migres a una instancia GPU.
 Puedes cambiar `DEPLOY_ON_PUSH` para activar/desactivar deploy automatico por push.
 
 `DEPLOY_ON_PUSH` se lee desde el `.env` versionado en el repositorio.

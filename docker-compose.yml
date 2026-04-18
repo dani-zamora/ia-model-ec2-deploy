@@ -9,7 +9,6 @@ services:
       OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-24h}"
     volumes:
       - ollama_data:/root/.ollama
-    gpus: all
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:11434/api/tags >/dev/null || exit 1"]
       interval: 20s
