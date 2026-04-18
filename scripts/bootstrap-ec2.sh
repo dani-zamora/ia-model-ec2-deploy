@@ -65,9 +65,21 @@ fi
 
 echo "[3/7] Installing NVIDIA driver (if missing)"
 NEED_REBOOT=0
-if ! command -v nvidia-smi >/dev/null 2>&1; then
+if ! nvidia-smi >/dev/null 2>&1; then
   ubuntu-drivers install
   NEED_REBOOT=1
+fi
+
+if [[ "$NEED_REBOOT" -eq 1 ]]; then
+  echo "NVIDIA driver installed/updated. Reboot required before continuing."
+  echo "Run: sudo reboot"
+  exit 0
+fi
+
+if ! nvidia-smi >/dev/null 2>&1; then
+  echo "NVIDIA driver is not operational (nvidia-smi failed)."
+  echo "Check driver installation and reboot the instance, then rerun bootstrap."
+  exit 1
 fi
 
 echo "[4/7] Installing NVIDIA container toolkit"
@@ -114,6 +126,16 @@ for _ in $(seq 1 30); do
 done
 
 docker exec ollama ollama pull "$MODEL"
+
+echo "Removing old Ollama images"
+CURRENT_IMAGE_ID="$(docker inspect --format='{{.Image}}' ollama)"
+mapfile -t OLLAMA_IMAGE_IDS < <(docker image ls --no-trunc --quiet ollama/ollama | sort -u)
+for IMAGE_ID in "${OLLAMA_IMAGE_IDS[@]}"; do
+  if [[ -n "$IMAGE_ID" && "$IMAGE_ID" != "$CURRENT_IMAGE_ID" ]]; then
+    docker image rm -f "$IMAGE_ID" >/dev/null || true
+  fi
+done
+docker image prune -f >/dev/null || true
 
 echo "Bootstrap finished."
 if [[ "$NEED_REBOOT" -eq 1 ]]; then

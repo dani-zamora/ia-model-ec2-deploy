@@ -47,6 +47,16 @@ fi
 echo "[deploy] Ensuring model ${OLLAMA_MODEL}"
 docker exec ollama ollama pull "${OLLAMA_MODEL}"
 
+echo "[deploy] Removing old Ollama images"
+CURRENT_IMAGE_ID="$(docker inspect --format='{{.Image}}' ollama)"
+mapfile -t OLLAMA_IMAGE_IDS < <(docker image ls --no-trunc --quiet ollama/ollama | sort -u)
+for IMAGE_ID in "${OLLAMA_IMAGE_IDS[@]}"; do
+  if [[ -n "$IMAGE_ID" && "$IMAGE_ID" != "$CURRENT_IMAGE_ID" ]]; then
+    docker image rm -f "$IMAGE_ID" >/dev/null || true
+  fi
+done
+docker image prune -f >/dev/null || true
+
 echo "[deploy] Current tags"
 curl -fsS "http://127.0.0.1:${OLLAMA_PORT}/api/tags"
 echo
