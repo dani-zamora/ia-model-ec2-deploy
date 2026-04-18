@@ -36,10 +36,10 @@ Con `DEPLOY_ON_PUSH=true` (valor actual), cada `push` a `main` dispara deploy.
 Conectate por SSH y ejecuta:
 
 ```bash
-git clone <TU_URL_GITHUB> /opt/ia-model-ec2-deploy
+git clone https://github.com/dani-zamora/ia-model-ec2-deploy /opt/ia-model-ec2-deploy
 cd /opt/ia-model-ec2-deploy
 sudo bash ./scripts/bootstrap-ec2.sh \
-  --repo-url <TU_URL_GITHUB> \
+  --repo-url https://github.com/dani-zamora/ia-model-ec2-deploy \
   --branch main \
   --app-dir /opt/ia-model-ec2-deploy \
   --model gemma4:e2b \
