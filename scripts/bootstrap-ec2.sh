@@ -64,13 +64,11 @@ if id -u "$DEPLOY_USER" >/dev/null 2>&1; then
 fi
 
 echo "[3/7] Installing NVIDIA driver (if missing)"
-NEED_REBOOT=0
 if ! nvidia-smi >/dev/null 2>&1; then
-  ubuntu-drivers install
-  NEED_REBOOT=1
+  ubuntu-drivers install || true
 fi
 
-if [[ "$NEED_REBOOT" -eq 1 ]]; then
+if [[ -f /var/run/reboot-required ]]; then
   echo "NVIDIA driver installed/updated. Reboot required before continuing."
   echo "Run: sudo reboot"
   exit 0
@@ -78,7 +76,10 @@ fi
 
 if ! nvidia-smi >/dev/null 2>&1; then
   echo "NVIDIA driver is not operational (nvidia-smi failed)."
-  echo "Check driver installation and reboot the instance, then rerun bootstrap."
+  echo "Run diagnostics:"
+  echo "  lspci | grep -i nvidia"
+  echo "  ubuntu-drivers list --gpgpu"
+  echo "If no NVIDIA device appears in lspci, the instance type likely has no GPU."
   exit 1
 fi
 
@@ -138,6 +139,3 @@ done
 docker image prune -f >/dev/null || true
 
 echo "Bootstrap finished."
-if [[ "$NEED_REBOOT" -eq 1 ]]; then
-  echo "A reboot is required to fully activate NVIDIA driver. Run: sudo reboot"
-fi
